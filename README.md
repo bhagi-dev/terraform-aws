@@ -9,7 +9,6 @@ terraform init
 terraform plan
 terraform apply
 ```
-
 ## Execute the below script to destroy the environment
 
 ```
