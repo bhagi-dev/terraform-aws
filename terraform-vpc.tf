@@ -1,5 +1,5 @@
 resource "aws_vpc" "my_vpc" {
-  cidr_block       = "10.0.0.0/16"
+  cidr_block       = "10.0.0.0/21"
   enable_dns_hostnames = true
 
   tags {
@@ -9,7 +9,7 @@ resource "aws_vpc" "my_vpc" {
 
 resource "aws_subnet" "public_us_east_1a" {
   vpc_id     = "${aws_vpc.my_vpc.id}"
-  cidr_block = "10.0.0.0/24"
+  cidr_block = "10.0.0.0/23"
   availability_zone = "us-east-1a"
 
   tags {
@@ -19,7 +19,27 @@ resource "aws_subnet" "public_us_east_1a" {
 
 resource "aws_subnet" "public_us_east_1b" {
   vpc_id     = "${aws_vpc.my_vpc.id}"
-  cidr_block = "10.0.1.0/24"
+  cidr_block = "10.0.2.0/23"
+  availability_zone = "us-east-1b"
+
+  tags {
+    Name = "Public Subnet us-east-1b"
+  }
+}
+
+resource "aws_subnet" "private_us_east_1a" {
+  vpc_id     = "${aws_vpc.my_vpc.id}"
+  cidr_block = "10.0.3.0/23"
+  availability_zone = "us-east-1a"
+
+  tags {
+    Name = "Public Subnet us-east-1a"
+  }
+}
+
+resource "aws_subnet" "private_us_east_1b" {
+  vpc_id     = "${aws_vpc.my_vpc.id}"
+  cidr_block = "10.0.4.0/23"
   availability_zone = "us-east-1b"
 
   tags {
@@ -35,7 +55,7 @@ resource "aws_internet_gateway" "my_vpc_igw" {
   }
 }
 
-resource "aws_route_table" "my_vpc_public" {
+resource "aws_route_table" "my_vpc_route_table" {
     vpc_id = "${aws_vpc.my_vpc.id}"
 
     route {
@@ -50,22 +70,53 @@ resource "aws_route_table" "my_vpc_public" {
 
 resource "aws_route_table_association" "my_vpc_us_east_1a_public" {
     subnet_id = "${aws_subnet.public_us_east_1a.id}"
-    route_table_id = "${aws_route_table.my_vpc_public.id}"
+    route_table_id = "${aws_route_table.my_vpc_route_table.id}"
 }
 
 resource "aws_route_table_association" "my_vpc_us_east_1b_public" {
     subnet_id = "${aws_subnet.public_us_east_1b.id}"
-    route_table_id = "${aws_route_table.my_vpc_public.id}"
+    route_table_id = "${aws_route_table.my_vpc_route_table.id}"
 }
 
-resource "aws_security_group" "allow_http" {
-  name        = "allow_http"
-  description = "Allow HTTP inbound connections"
+resource "aws_route_table_association" "my_vpc_us_east_1a_private" {
+    subnet_id = "${aws_subnet.private_us_east_1a.id}"
+    route_table_id = "${aws_route_table.my_vpc_route_table.id}"
+}
+
+resource "aws_route_table_association" "my_vpc_us_east_1b_private" {
+    subnet_id = "${aws_subnet.private_us_east_1b.id}"
+    route_table_id = "${aws_route_table.my_vpc_route_table.id}"
+}
+
+resource "aws_instance" "server" {
+  ami                         = ami-01d86dd3e5bc5d67f
+  instance_type               = t2.micro
+  key_name                    = local.ssh_key
+  subnet_id                   = public_us_east_1a
+  vpc_security_group_ids      = [aws_security_group.id]
+  associate_public_ip_address = true
+
+  tags = {
+    Name    = "Bastion host"
+  }
+}
+
+
+resource "aws_security_group" "allow_http_ssh" {
+  name        = "allow_http_ssh"
+  description = "Allow HTTP SSH inbound connections"
   vpc_id = "${aws_vpc.my_vpc.id}"
 
   ingress {
     from_port   = 80
     to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -78,7 +129,7 @@ resource "aws_security_group" "allow_http" {
   }
 
   tags {
-    Name = "Allow HTTP Security Group"
+    Name = "Allow HTTP SSH Security Group"
   }
 }
 
@@ -90,7 +141,7 @@ data "aws_s3_bucket_object" "bootstrap_script" {
 resource "aws_launch_configuration" "web" {
   name_prefix = "web-"
 
-  image_id = "ami-09479453c5cde9639" # Amazon Linux AMI 2018.03.0 (HVM)
+  image_id = "ami-01f08ef3e76b957e5" # Amazon Linux AMI 2018.03.0 (HVM)
   instance_type = "t2.micro"
   key_name = "Lenovo T410"
 
